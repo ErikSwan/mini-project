@@ -12,36 +12,39 @@
 #define PCM_DEVICE "hw:1,0"//"hw:1,0" for the dac  "default" for the onbuilt jack
 #define MAX_PLAY_RATE 5//basically for buffer management so our input buffer is always big enough for the effective downsample happening
 #define converter 1//0 for highest quality(dont do this), 1 for medium(this works), 2 for fastest sinc, 3 for ZOH, 4 for linear 
-//void playback(char cardname, int freq, int frame, int *buf); 
-//void playback(snd_pcm_t *handle, snd_pcm_hw_params_t *params, int *buff);
-//long fib(long n);
 main(int argc, char **argv){
     snd_pcm_t *handle;
     snd_pcm_hw_params_t *params;
     snd_pcm_uframes_t frames;
     //the libsamplerate stuff
-    SRC_DATA datastr;
-    SRC_STATE *statestr;
+    SRC_DATA datastr;//holds the data(inpu and output),input frames used, output frames generated 
+    SRC_STATE *statestr;//holds the state
     int error;
     //the lbsndfile stuff, one keeps the header the other the data
-    SF_INFO sfinf;
+    SF_INFO sfinf;//has all the info like total frames,samplerate, channels, mode
     SNDFILE *input = NULL;
     //buffer to pass to the playback function
     float *buffin = NULL;//float into the converter
     float *filein = NULL;
     float *buffout = NULL;//float out of the converter
     short *final = NULL;//final array to write to snd card
-    int pcm, readcount, pcmrc, blah;
-    float *eofin;
-    int tmp;
-    long tempf;
-    float seconds;
-    int minf, maxf;    
+    int pcm, readcount, pcmrc, blah;//pcm is used for error checking the alsa stuff, pcmrc is used in the main loop
+    float *eofin;//to point to the end of the file's raw data
+    int tmp;//used to hold information that is printed in stdio
+    int i = 0;//index for initialising the output DAC
     // pointer for the file input
+    if (argc != 3){
+        printf("Usage requires music file and src ratio, please try again\n\n");
+        return 0;
+    }
     char *inputname = argv[1];
     //int *filein = argv[1];
 
     input = sf_open(inputname, SFM_READ, &sfinf);
+    if (input == NULL){
+        printf("could not open file sorry \n\n");
+        return 0;
+    }
     fprintf(stderr, "Channels : %d\n", sfinf.channels);
     fprintf(stderr, "Sample rate; %d\n", sfinf.samplerate);
     fprintf(stderr, "Sections: %d\n", sfinf.sections);
@@ -52,7 +55,7 @@ main(int argc, char **argv){
    if ((filein = malloc(sizeof(float)*sfinf.channels*sfinf.frames)) == NULL)
    {
        printf("MAN YOU OUT OF MEM");
-       return(0);
+       return 0;
    }
    blah = sf_readf_float(input, filein, sfinf.frames);
    buffin = filein;
@@ -113,6 +116,23 @@ main(int argc, char **argv){
     datastr.src_ratio = atof(argv[2]);//hopefully plays at twice the speed
     datastr.data_out = buffout;
     datastr.output_frames = frames;//frames
+    while (i != 50){
+       memset(final, 0, frames*sfinf.channels);
+       pcmrc = snd_pcm_writei(handle, final, frames);//frames
+               if (pcmrc == -EPIPE){//this is where the error happens on the DAc for like 25 - 500 ms it underruns but recovers, so i dont know
+            printf("UNDERRUN!\n");
+            snd_pcm_prepare(handle);
+        }
+        else if(pcmrc < 0){
+            printf("ERROR WRITING!!!\n");
+        }
+       // else if (pcmrc != datastr.output_frames_gen){
+         //   printf("WRITE != READ\n");
+       // }
+        i++;
+    }
+    
+    
     //the while loops basically processes the music file
     //
     //
@@ -141,7 +161,7 @@ main(int argc, char **argv){
        src_float_to_short_array(buffout, final, frames*sfinf.channels);//frames
        usleep(3000); //even with all the processing we can still sleep for like 3000;
        pcmrc = snd_pcm_writei(handle, final, frames);//frames
-               if (pcmrc == -EPIPE){//this is where the error happens on the DAc for like 25 - 500 ms it underruns but recovers, so i dont know
+       if (pcmrc == -EPIPE){//this is where the error happens on the DAc for like 25 - 500 ms it underruns but recovers, so i dont know
             printf("UNDERRUN!\n");
             snd_pcm_prepare(handle);
         }
