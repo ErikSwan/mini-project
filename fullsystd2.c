@@ -11,17 +11,31 @@
 #define MAX_PLAY_RATE 5
 #define NUMFILES 5
 
-volatile int PLAY_PAUSEg = 1;
-volatile int filenumg = 1;                  
-double src_rto = 1;
-volatile float gain = 1;
+// GLOBAL STRUCT
+typedef struct InputData {
+  float speed;  // slide bar potentiometers, slave 1
+  int gain;   // slide bar potentiometers, slave 1
+  //uint8 high_eq;  // knobs, slave 1
+  //uint8 mid_eq; // knobs, slave 1
+  //uint8 low_eq; // knobs, slave 1
+  //uint8 fx1;    // knobs, slave 1
+  //uint8 fx2;    // knobs, slave 1
+  //uint8 fx3;    // knobs, slave 1
+  //uint8 encoder;  // turntable encoder count, slave 1
+  //uint8 next;   // buttons, slave 2
+  //uint8 prev;   // buttons, slave 2
+  int play_pause; // buttons, slave 2
+  //uint8 fx_onoff; // buttons, slave 2
+} InputData;
 
+InputData data = {1,5,1};
+int flag = 0;
+void * thread_sampling(void * unused);
 
-inputdata data = {1, 1, 1.0, 1.0};
 
 //void fileloadmem(float **filebase, float **filepos, float **eofin, SNDFILE **input, SF_INFO *sfinf);
 //void fileopen(SNDFILE **input, SF_INFO *sfinf, char *filename);
-void * capturekey(void * data);
+
 
 
 main(int argc, char **argv){
@@ -35,8 +49,10 @@ main(int argc, char **argv){
 	int pcm, pcmrc;
 	int tmp;
 	int i = 0;
-    int *blah;
-    //float srcratios[3] = {.5, 1, 2.0};
+  int *blah;
+  // create the SPI thread
+  pthread_t * spithread = malloc(sizeof(pthread_t));
+  
       
 
 	SNDFILE *inputf;
@@ -49,11 +65,6 @@ main(int argc, char **argv){
 	snd_pcm_t *handle;
 	snd_pcm_hw_params_t *params;
 	snd_pcm_uframes_t frames;
-    
-    //data->PLAY_PAUSE = 1;
-    //data->src_r = 1;
-    //data->filenum = 1;
-    //data->gain = 1;
 
 //	fileopen(&inputf, &sfinf, file1);
 	inputf = sf_open(file2, SFM_READ, &sfinf);
@@ -130,17 +141,16 @@ main(int argc, char **argv){
         i++;
     }
 
-   
+    pthread_create(spithread, NULL,  thread_sampling, NULL);
     while(buffin != eofin){
-       datamain = data;
         datastr.data_in = buffin;
     //   datastr.src_ratio = src_ratio;
       // if (datastr.input_frames == 0 ){datastr.input_frames = frames*MAX_PLAY_RATE;}//frames
        datastr.input_frames = frames*MAX_PLAY_RATE;
-       if (datamain.PLAY_PAUSE == 1){
+       if (data.play_pause == 1){
           // datastr.src_ratio = datamain.src_r;
          // printf("SRC RATIO: %f\n\n", data.src_r);
-           if (src_set_ratio(statestr, src_rto) != 0){
+           if (src_set_ratio(statestr, data.speed) != 0){
                 printf("Could not reset ratio\n");
            }
            
@@ -154,7 +164,7 @@ main(int argc, char **argv){
            }
        }
        
-        datastr.src_ratio = src_rto;   
+        datastr.src_ratio = data.speed;   
         if ((error = src_process(statestr, &datastr)))
        {
            printf("\n\nERRORR converting: %s\n\n", src_strerror(error));
@@ -178,7 +188,7 @@ main(int argc, char **argv){
         }
     	}
     	
-    	if (datamain.PLAY_PAUSE == 0){
+    	if (data.play_pause == 0){
     		continue;
     	}
 
@@ -188,10 +198,49 @@ main(int argc, char **argv){
     free(filein);
     free(buffout);
     free(final);
+    free(spithread);
 
    // free(data);
 	return 0;
 
+}
+
+// entry function for the sampling thread
+void * thread_sampling(void * unused)
+{
+  // DECLARATIONS
+  char c = ' ';
+  
+  while (1) {
+    c = getc(stdin);
+    getc(stdin);
+    
+    // CONDITIONAL ADJUSTMENTS  
+    if (c == 'p'){
+      data.play_pause = !(data.play_pause);
+      flag = 1;
+    } else if (c == 'f'){
+      data.speed = data.speed - .1;
+      flag = 1;
+    } else if (c == 's'){
+      data.speed = data.speed + .1;
+      flag = 1;
+    } else if (c == 'u'){
+      data.gain++;
+      flag = 1;
+    } else if (c == 'd'){
+      data.gain--;
+      flag = 1;
+    }
+    
+    /*
+    printf("data.speed = %.1f\n",data.speed);
+    printf("data.gain = %d\n",data.gain);
+    printf("data.play_pause = %d\n",data.play_pause);
+    */
+  }
+
+  return NULL;
 }
 
 /*void fileopen(SNDFILE **input, SF_INFO *sfinf, char *filename){
