@@ -202,7 +202,7 @@ main(int argc, char **argv) {
 void * thread_sampling(void * unused)
 {
   // INITIALIZE SPI FOR WRITER
-  if (!bcm2835_init()) {return 1;}
+  if (!bcm2835_init()) {return NULL;}
 
   bcm2835_spi_begin();
   bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);      // The default
@@ -236,9 +236,9 @@ void * thread_sampling(void * unused)
           read_data = 0;
       }
 
-      data.speed = ((1.4/255) * read_data[0]) + 0.3;
+      data.speed = ((1.4/255) * rec_data[0]) + 0.3;
       printf("Speed = %.1f\n");
-
+      data.play_pause = rec_data[10] & 0x80;
   }
 
   bcm2835_spi_end();
