@@ -15,7 +15,7 @@
 // GLOBAL STRUCT
 typedef struct InputData {
   float speed;  // slide bar potentiometers, slave 1
-  int gain;   // slide bar potentiometers, slave 1
+  float gain;   // slide bar potentiometers, slave 1
   //uint8 high_eq;  // knobs, slave 1
   //uint8 mid_eq; // knobs, slave 1
   //uint8 low_eq; // knobs, slave 1
@@ -29,10 +29,10 @@ typedef struct InputData {
   int trackno; //menu toggle encoder
   //uint8 fx_onoff; // buttons, slave 2
 } InputData;
-InputData data = {1,5,0,0,1,0};
+InputData data = {1,.5,0,0,1,0};
 int flag = 0;
 void * thread_sampling(void * unused);
-
+void gainfn(float *inputarr, int samples, int channels, float mult);
 /**********************************************************************/
 main(int argc, char **argv) {
   
@@ -173,6 +173,7 @@ main(int argc, char **argv) {
        buffin = buffin + datastr.input_frames_used*sfinf[prevtrack].channels;
        //datastr.input_frames -= datastr.input_frames_used; 
        //printf("number of frames generated %d \n", datastr.output_frames_gen);
+       gainfn(buffout, frames, sfinf[prevtrack].channels, data.gain);
        src_float_to_short_array(buffout, final, frames*sfinf[prevtrack].channels);//frames
        usleep(3000); //even with all the processing we can still sleep for like 3000;
        pcmrc = snd_pcm_writei(handle, final, frames);//frames
@@ -236,10 +237,12 @@ void * thread_sampling(void * unused)
       data.speed = data.speed + .1;
       flag = 1;
     } else if (c == 'u'){
-      data.gain++;
+      data.gain+=.1;
+      if (data.gain >= 2) data.gain = 1.2;
       flag = 1;
     } else if (c == 'd'){
-      data.gain--;
+      data.gain-=.1;
+      if (data.gain <= .2) data.gain = .2;
       flag = 1;
     }else if (c == 'n'){
         data.next = 1;
@@ -256,4 +259,11 @@ void * thread_sampling(void * unused)
     }
   }
     return NULL;
+}
+
+void gainfn(float *inputarr, int samples, int channels , float mult){
+    int i = 0;
+    for (i = 0; i<channels*samples;i++){
+        inputarr[i] = inputarr[i] * mult;
+    }
 }
