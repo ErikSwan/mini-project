@@ -150,7 +150,7 @@ main(int argc, char **argv) {
     while(buffin != eofin){
         datastr.data_in = buffin;
         datastr.input_frames = frames*MAX_PLAY_RATE;
-        if (data.play_pause == 1 && data.next == 0 && data.back == 0){
+        if (data.play_pause == 1 && data.next == 0 && data.back == 0 && data.trackno == prevtrack){
            if (src_set_ratio(statestr, data.speed) != 0){
                 printf("Could not reset ratio\n");
            }
@@ -193,7 +193,7 @@ main(int argc, char **argv) {
                 break;
             continue;
     	}
-        else if (data.next == 1 || data.back == 1) {
+        else if (data.next == 1 || data.back == 1 || (data.trackno != prevtrack)) {
             break;
         }
     }
@@ -249,6 +249,10 @@ void * thread_sampling(void * unused)
         data.back = 1;
         data.trackno -= 1;
         if (data.trackno < 0) data.trackno = 0;
+    }else if (c == '1'){
+        data.trackno = 0;
+    } else if (c == '2'){
+        data.trackno = 1;
     }
   }
     return NULL;
