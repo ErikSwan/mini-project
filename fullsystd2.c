@@ -5,6 +5,7 @@
 #include <time.h>
 #include <samplerate.h>
 #include <pthread.h>
+#include <bcm2835.h>
 
 #define PCM_DEVICE "default"
 #define converter 1
@@ -32,53 +33,50 @@ InputData data = {1,5,1};
 int flag = 0;
 void * thread_sampling(void * unused);
 
-
-//void fileloadmem(float **filebase, float **filepos, float **eofin, SNDFILE **input, SF_INFO *sfinf);
-//void fileopen(SNDFILE **input, SF_INFO *sfinf, char *filename);
-
-
-
-main(int argc, char **argv){
-	float *filein = NULL;
-	float *buffin = NULL;
-	float *eofin;
-	float *buffout;
-	short *final;
-	char *file1 = "musik.wav";
-	char *file2 = "got.wav";
-	int pcm, pcmrc;
-	int tmp;
-	int i = 0;
-  int *blah;
-  // create the SPI thread
-  pthread_t * spithread = malloc(sizeof(pthread_t));
+/**********************************************************************/
+main(int argc, char **argv) {
   
-      
+    // DECLARATIONS
+    float *filein = NULL;
+  	float *buffin = NULL;
+  	float *eofin;
+  	float *buffout;
+  	short *final;
+  	char *file1 = "musik.wav";
+  	char *file2 = "got.wav";
+  	int pcm, pcmrc;
+  	int tmp;
+  	int i = 0;
+    int *blah;
+    
+    //  SPI THREAD
+    pthread_t * spithread = malloc(sizeof(pthread_t));
+    
+    // INITIALIZATIONS
+  	SNDFILE *inputf;
+  	SF_INFO sfinf;
 
-	SNDFILE *inputf;
-	SF_INFO sfinf;
+  	SRC_DATA datastr;
+  	SRC_STATE  *statestr;
+  	int error;
 
-	SRC_DATA datastr;
-	SRC_STATE  *statestr;
-	int error;
+  	snd_pcm_t *handle;
+  	snd_pcm_hw_params_t *params;
+  	snd_pcm_uframes_t frames;
 
-	snd_pcm_t *handle;
-	snd_pcm_hw_params_t *params;
-	snd_pcm_uframes_t frames;
-
-//	fileopen(&inputf, &sfinf, file1);
-	inputf = sf_open(file2, SFM_READ, &sfinf);
-	if (inputf == NULL) printf("COULD NOT OPEN FILE SORRY \n\n");
-    if ((filein = malloc(sizeof(float)*sfinf.channels*sfinf.frames)) == NULL)
-   {
-       printf("MAN YOU OUT OF MEM");
-       return 0;
-   }
-	//load file into memory
-//	fileloadmem(&filein, &buffin, &eofin, &inputf, &sfinf);
+    // Open file and create pointer
+  	inputf = sf_open(file2, SFM_READ, &sfinf);
+  	if (inputf == NULL) printf("COULD NOT OPEN FILE SORRY \n\n");
+        if ((filein = malloc(sizeof(float)*sfinf.channels*sfinf.frames)) == NULL)
+        {
+           printf("MAN YOU OUT OF MEM");
+           return 0;
+        }
+	
+    //load file into memory
    	sf_readf_float(inputf, filein , sfinf.frames);
-	buffin = filein;
-	eofin = filein + sfinf.frames * sfinf.channels ;
+	  buffin = filein;
+	  eofin = filein + sfinf.frames * sfinf.channels ;
 
 
     if (pcm =snd_pcm_open(&handle, PCM_DEVICE, SND_PCM_STREAM_PLAYBACK, 0)< 0){
@@ -88,6 +86,7 @@ main(int argc, char **argv){
     //allocate default parameters
     snd_pcm_hw_params_alloca(&params);
     snd_pcm_hw_params_any(handle, params);
+    
     //set parameters
     if (pcm = snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED)< 0){
         printf("Cannot set interleaved mode\n");
@@ -102,6 +101,7 @@ main(int argc, char **argv){
     if (pcm = snd_pcm_hw_params_set_rate(handle, params, sfinf.samplerate, 0)< 0){
         printf("CANNOT SET SAMPLERATES \n");
     }
+    
     //write parameters
     if (pcm = snd_pcm_hw_params(handle, params)< 0){
         printf("CANNOT SET HARDWARE PARAMETERS\n");
@@ -120,7 +120,6 @@ main(int argc, char **argv){
 
     statestr = src_new (converter, sfinf.channels, &error);
 
-       //datastr->end_of_input = 0;
     datastr.end_of_input = 0;
     datastr.data_out = buffout;
     datastr.output_frames = frames;//frames
@@ -135,38 +134,32 @@ main(int argc, char **argv){
         else if(pcmrc < 0){
             printf("ERROR WRITING!!!\n");
         }
-       // else if (pcmrc != datastr.output_frames_gen){
-         //   printf("WRITE != READ\n");
-       // }
         i++;
     }
 
+    // create the thread wooooo
     pthread_create(spithread, NULL,  thread_sampling, NULL);
+    
+    /***************** START PLAYING MUSIC *******************/
     while(buffin != eofin){
         datastr.data_in = buffin;
-    //   datastr.src_ratio = src_ratio;
-      // if (datastr.input_frames == 0 ){datastr.input_frames = frames*MAX_PLAY_RATE;}//frames
-       datastr.input_frames = frames*MAX_PLAY_RATE;
-       if (data.play_pause == 1){
-          // datastr.src_ratio = datamain.src_r;
-         // printf("SRC RATIO: %f\n\n", data.src_r);
+        datastr.input_frames = frames*MAX_PLAY_RATE;
+        if (data.play_pause == 1){
            if (src_set_ratio(statestr, data.speed) != 0){
                 printf("Could not reset ratio\n");
            }
            
-           
            if ((eofin - buffin) < frames*MAX_PLAY_RATE) {
-           //datastr.end_of_input = SF_TRUE; // if you read less than a full frame it says i am done
+           /// if you read less than a full frame it says i am done
            memset(buffout, 0.0, frames*sfinf.channels*sizeof(float));//frames
            if( (eofin - buffin) < frames) {
                datastr.end_of_input = SF_TRUE;
                break;
            }
-       }
+        }
        
         datastr.src_ratio = data.speed;   
-        if ((error = src_process(statestr, &datastr)))
-       {
+        if ((error = src_process(statestr, &datastr))){
            printf("\n\nERRORR converting: %s\n\n", src_strerror(error));
            exit(1);
        }
@@ -208,7 +201,7 @@ main(int argc, char **argv){
 // entry function for the sampling thread
 void * thread_sampling(void * unused)
 {
-  // DECLARATIONS
+ // DECLARATIONS
   char c = ' ';
   
   while (1) {
@@ -232,28 +225,5 @@ void * thread_sampling(void * unused)
       data.gain--;
       flag = 1;
     }
-    
-    /*
-    printf("data.speed = %.1f\n",data.speed);
-    printf("data.gain = %d\n",data.gain);
-    printf("data.play_pause = %d\n",data.play_pause);
-    */
-  }
-
-  return NULL;
+    return NULL;
 }
-
-/*void fileopen(SNDFILE **input, SF_INFO *sfinf, char *filename){
-	input = sf_open(filename, SFM_READ, &sfinf);
-	if (input == NULL) printf("COULD NOT OPEN FILE SORRY \n\n");
-	return;
-}*/
-
-/*void fileloadmem(float **filebase, float **filepos, float **eofin, SNDFILE **input, SF_INFO *sfinf){
-	sf_readf_float(input, filebase , sfinf.frames);
-	filepos = filebase;
-	eofin = filebase + sfinf.frames * sfinf.channels ;
-	return;	
-}*/
-
-
