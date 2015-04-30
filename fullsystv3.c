@@ -12,6 +12,7 @@
 #define MAX_PLAY_RATE 5
 #define NUMFILES 5
 
+// gcc -lbcm2835 -lsamplerate -lsndfile -lasound -lpthread fullsystv3.c -o sys3
 // GLOBAL STRUCT
 typedef struct InputData {
   float speed;  // slide bar potentiometers, slave 1
@@ -67,11 +68,11 @@ main(int argc, char **argv) {
     // Open file and create pointer
   	inputf = sf_open(file2, SFM_READ, &sfinf);
   	if (inputf == NULL) printf("COULD NOT OPEN FILE SORRY \n\n");
-      if ((filein = malloc(sizeof(float)*sfinf.channels*sfinf.frames)) == NULL)
-     {
-         printf("MAN YOU OUT OF MEM");
-         return 0;
-     }
+        if ((filein = malloc(sizeof(float)*sfinf.channels*sfinf.frames)) == NULL)
+        {
+           printf("MAN YOU OUT OF MEM");
+           return 0;
+        }
 	
     //load file into memory
    	sf_readf_float(inputf, filein , sfinf.frames);
@@ -164,8 +165,7 @@ main(int argc, char **argv) {
            exit(1);
        }
        buffin = buffin + datastr.input_frames_used*sfinf.channels;
-       //datastr.input_frames -= datastr.input_frames_used; 
-       //printf("number of frames generated %d \n", datastr.output_frames_gen);
+       
        src_float_to_short_array(buffout, final, frames*sfinf.channels);//frames
        usleep(3000); //even with all the processing we can still sleep for like 3000;
        pcmrc = snd_pcm_writei(handle, final, frames);//frames
