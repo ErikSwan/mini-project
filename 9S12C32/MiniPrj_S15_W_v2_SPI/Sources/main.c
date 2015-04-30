@@ -79,18 +79,19 @@ void pmsglcd(char[]);
 
 
 /* Variable declarations */
-char leftpb	= 0;  // left pushbutton flag
-char rghtpb	= 0;  // right pushbutton flag
-char prevpb	= 0;  // previous pushbutton state
+//char leftpb	= 0;  // left pushbutton flag
+//char rghtpb	= 0;  // right pushbutton flag
+//char prevpb	= 0;  // previous pushbutton state
 
-int POT[6] = {0,0,0,0,0,0}; // 6 POTs   ATD 0-5
-int FADER[2] = {0,0}; // 2 FADERS  ATD 6-7
+//int POT[6] = {0,0,0,0,0,0}; // 6 POTs   ATD 0-5
+//int FADER[2] = {0,0}; // 2 FADERS  ATD 6-7
 // VARIABLES FOR MENU ENCODER
-int lookup[16] = {0,1,2,3,2,0,3,1,1,3,0,2,3,2,1,0}; // lookup table for encoder
-int code = 0; // the result of look up table
-int state = 0; // variable for previous state and current state for channels 1 & B
-int movement = 0; // increments or decrements based on direction of every pulse
-
+//int lookup[16] = {0,1,2,3,2,0,3,1,1,3,0,2,3,2,1,0}; // lookup table for encoder
+//int code = 0; // the result of look up table
+//int state = 0; // variable for previous state and current state for channels 1 & B
+//int movement = 0; // increments or decrements based on direction of every pulse
+char c = 0;
+char read = 0;
    	   			 		  			 		       
 
 /* Special ASCII characters */
@@ -134,14 +135,15 @@ void  initializations(void) {
   COPCTL = 0x40   ; //COP off; RTI and COP stopped in BDM-mode
 
 /* Initialize asynchronous serial port (SCI) for 9600 baud, interrupts off initially */
-  SCIBDH =  0x00; //set baud rate to 9600
+  /*SCIBDH =  0x00; //set baud rate to 9600
   SCIBDL =  0x9C; //24,000,000 / 16 / 156 = 9600 (approx)  
   SCICR1 =  0x00; //$9C = 156
   SCICR2 =  0x0C; //initialize SCI for program-driven operation
   DDRB   =  0x10; //set PB4 for output mode
   PORTB  =  0x10; //assert DTR pin on COM port
-
+  */
 /* Initialize peripherals */
+  /*
   DDRT = 0x3F; // for encoder should be 9F becuase pt 5 and 5 are input for encoder
   PTT = 0x00;
   
@@ -151,10 +153,10 @@ void  initializations(void) {
   ATDCTL2 = 0x80;
   ATDCTL3 = 0x00; // conversion sequence length=8
   ATDCTL4 = 0x85;  
-            
+  */          
 /* Initialize interrupts */
-  SPICR1 = 0x00; // bit 4 is 0 because its slave mode
-  SPICR2 = 0x09;    // bit 0 & 3 is 1
+  SPICR1 = 0xC8; // bit 4 is 0 because its slave mode
+  SPICR2 = 0x00;    // normal mode
   //SPIBR = 1;
 	
 /* Initialize the LCD
@@ -165,16 +167,18 @@ void  initializations(void) {
      - clear LCD (LCDCLR instruction)
      - wait for 2ms so that the LCD can wake up     
 */ 
+/*
   PTT_PTT4 = 1;
   PTT_PTT3 = 0;
   send_i(LCDON);
   send_i(TWOLINE);
   send_i(LCDCLR);
   lcdwait();
+  */
   
 /* Initialize RTI for 2.048 ms interrupt rate */	
-  CRGINT_RTIE = 1;
-  RTICTL = RTICTL | (0x51);
+  /*CRGINT_RTIE = 1;
+  RTICTL = RTICTL | (0x51);*/
   
 /* Initialize TIM Ch 7 (TC7) for periodic interrupts for encoder every .1 ms
      - enable timer subsystem
@@ -184,13 +188,16 @@ void  initializations(void) {
      - initially disable TIM Ch 7 interrupts      
 */
 /*  INITIALIZATIONS FOR ROTOR ENCODER */
+  /*
   TSCR1_TEN = 1; // enable time subsystem
   TIOS_IOS7 = 1; // sets channel 7 to output compare
   TSCR2 = 0x0C;  // prescale 16
   TC7 = 30; // count up to 30 which samples every 20us in channel 7 register (1500 is 1ms)
 	TIE = 0x80; // enable!!
   
-  fdisp();      
+  fdisp();
+  */
+        
 	      
 }
 
@@ -208,6 +215,7 @@ void main(void) {
  for(;;) {
   
 /* < start of your main loop > */ 
+  /*
    if (movement > 30){
     //skip forward
     movement = 0;
@@ -216,7 +224,17 @@ void main(void) {
     movement = 0;
    }
   
-   } /* loop forever */
+   */
+   /*
+   if (SPISR_SPIF == 1) {
+    read = SPISR;
+    c = SPIDR;
+   }
+     */
+   } 
+   
+   
+    /* loop forever */
    
 }   /* do not leave main */
 
@@ -231,6 +249,7 @@ void main(void) {
 
 interrupt 7 void RTI_ISR(void)
 {
+  	/*
   	// clear RTI interrupt flagt 
   	CRGFLG = CRGFLG | 0x80; 
     ATDCTL5 = 0x10;
@@ -244,7 +263,7 @@ interrupt 7 void RTI_ISR(void)
  	  POT[5] = ATDDR5H;  // fx3
  	  FADER[0] = ATDDR6H;// speed
  	  FADER[1] = ATDDR7H;// gain
-
+    */
 }
 
 /*
@@ -255,7 +274,7 @@ interrupt 7 void RTI_ISR(void)
 
 interrupt 15 void TIM_ISR(void)
 {
-  
+  /*
   // INTERRUPT FOR ROTOR ENCODER
   
   // clear TIM CH 7 interrupt flag 
@@ -279,7 +298,7 @@ interrupt 15 void TIM_ISR(void)
   // code = 0 is no change, code = 3 is error
   // after the song has skipped appropriately, reset movement back to 0 in the main
   
-  
+  */
 }
 
 /*
@@ -290,9 +309,8 @@ interrupt 15 void TIM_ISR(void)
 
 interrupt 19 void SPI_ISR(void)
 {
- 
-
-
+    read = 0xAA;
+    c = SPIDR;
 }
 
 /*
