@@ -12,9 +12,17 @@ main(){
     bcm2835_spi_chipSelect(BCM2835_SPI_CS0);
     bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
 
-    uint8_t send_data = 0x23;
+    uint8_t send_data = 0x20;
     uint8_t read_data = bcm2835_spi_transfer(send_data);
-    printf("Sent to SPI:0x%02X, rad back: 0x%02X", send_data, read_data);
+    printf("Sent to SPI:0x%02X, rad back: 0x%02X\n", send_data, read_data);
+    
+    bcm2835_spi_chipSelect(BCM2835_SPI_CS1);
+    bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS1, LOW);
+    send_data = 0x30;
+    read_data = bcm2835_spi_transfer(send_data);
+    printf("READ BACK FROM 2: 0x%02X\n", read_data);
+    
+    
     bcm2835_spi_end();
     bcm2835_close();
 
