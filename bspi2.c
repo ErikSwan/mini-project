@@ -27,33 +27,39 @@ int main(int argc, char **argv)
 
       if (!bcm2835_init())
 	return 1;
-    char i;
-    uint8_t send_data[10] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0};
+    int i=0;
+    uint8_t send_data[11] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0,0xB0};
+    uint8_t rec_data[11] = {0,0,0,0,0,0,0,0,0,0};
     bcm2835_spi_begin();
     bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);      // The default
     bcm2835_spi_setDataMode(BCM2835_SPI_MODE0);                   // The default
     bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_128); // The default
     bcm2835_spi_chipSelect(BCM2835_SPI_CS0);                      // The default
     bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);      // the default
-
+    uint8_t read_data = 0;
     // Send a byte to the slave and simultaneously read a byte back from the slave
     // If you tie MISO to MOSI, you should read back what was sent
-   // while (1){
-       // for (i = 0; i < 10; i++){
-//    while(1){
-    uint8_t senddata = send_data[0], read_data;
-   read_data = bcm2835_spi_transfer(senddata);
-   //usleep(1000);
-   printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", senddata, read_data);
-   read_data = 0;       
+  
+
+ // while(1){
+     for (i=0;i<11;i++){
+        read_data = bcm2835_spi_transfer(send_data[i]);
+        // usleep(1000);
+        printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
+        rec_data[i] = read_data;
+        printf("Received data = 0x%02X\n",read_data); 
+        read_data = 0;
+     }
+  
+//   }
 //}
     
     
-   usleep(250000);
+   //usleep(250000);
+//}
   //  if (send_data != read_data)
     //  printf("Do you have the loopback from MOSI to MISO connected?\n");
     bcm2835_spi_end();
     bcm2835_close();
     return 0;
 }
-
