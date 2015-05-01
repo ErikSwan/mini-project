@@ -30,6 +30,7 @@ typedef struct InputData {
   //uint8 fx_onoff; // buttons, slave 2
 } InputData;
 
+volatile uint8_t on = 1;
 InputData data = {1,5,1};
 int flag = 0;
 void * thread_sampling(void * unused);
@@ -66,7 +67,7 @@ main(int argc, char **argv) {
   	snd_pcm_uframes_t frames;
 
     // Open file and create pointer
-  	inputf = sf_open(file2, SFM_READ, &sfinf);
+  	inputf = sf_open(file1, SFM_READ, &sfinf);
   	if (inputf == NULL) printf("COULD NOT OPEN FILE SORRY \n\n");
         if ((filein = malloc(sizeof(float)*sfinf.channels*sfinf.frames)) == NULL)
         {
@@ -146,9 +147,9 @@ main(int argc, char **argv) {
         datastr.data_in = buffin;
         datastr.input_frames = frames*MAX_PLAY_RATE;
         if (data.play_pause == 1){
-           if (src_set_ratio(statestr, data.speed) != 0){
-                printf("Could not reset ratio\n");
-           }
+           //if (src_set_ratio(statestr, data.speed) != 0){
+             //   printf("Could not reset ratio\n");
+           //}
            
            if ((eofin - buffin) < frames*MAX_PLAY_RATE) {
            /// if you read less than a full frame it says i am done
@@ -201,6 +202,7 @@ main(int argc, char **argv) {
 // entry function for the sampling thread
 void * thread_sampling(void * unused)
 {
+  
   // INITIALIZE SPI FOR WRITER
   if (!bcm2835_init()) {return NULL;}
 
@@ -216,29 +218,27 @@ void * thread_sampling(void * unused)
   uint8_t send_data[11] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0,0xB0};
   uint8_t rec_data[11] = {0,0,0,0,0,0,0,0,0,0};
   uint8_t read_data = 0;
-
-  for (i=0;i<11;i++){
-      read_data = bcm2835_spi_transfer(send_data[i]);
-      usleep(2000);
-      printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
-      rec_data[i] = read_data;
-      printf("Received data = 0x%02X\n",read_data); 
-      read_data = 0;
-  }
+  //pthread_mutex_t read_mutex;
 
   while (1) {
+      if (on == 0) {break;}
       for (i=0;i<11;i++){
+          //pthread_mutex_lock(&read_mutex);
           read_data = bcm2835_spi_transfer(send_data[i]);
-          usleep(2000);
-          printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
+          //pthread_mutex_unlock(&read_mutex);
+          printf("Received = 0x%02x\n",read_data);
           rec_data[i] = read_data;
-          printf("Received data = 0x%02X\n",read_data); 
           read_data = 0;
       }
 
+     // SET STRUCT VALUES
       data.speed = ((1.4/255) * rec_data[0]) + 0.3;
-      printf("Speed = %.1f\n");
-      data.play_pause = rec_data[10] & 0x80;
+      //data.play_pause = rec_data[10] & 0x80;
+      //if ((rec_data[10] & 0x80)==1){
+      //    data.play_pause = !(data.play_pause);
+      //}
+     // printf("speed = %.3f\n",data.speed);
+      usleep(3000);
   }
 
   bcm2835_spi_end();
