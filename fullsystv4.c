@@ -237,7 +237,7 @@ void * thread_sampling(void * unused)
 
   for (i=0;i<11;i++){
       read_data = bcm2835_spi_transfer(send_data[i]);
-      usleep(2000);
+      //usleep(2000);
       printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
       rec_data[i] = read_data;
       printf("Received data = 0x%02X\n",read_data); 
@@ -249,7 +249,7 @@ void * thread_sampling(void * unused)
           read_data = bcm2835_spi_transfer(send_data[i]);
           //printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
           rec_data[i] = read_data;
-          //printf("Received data = 0x%02X\n",read_data); 
+          printf("Received data = 0x%02X\n",read_data); 
           read_data = 0;
       }
       usleep(2000);
