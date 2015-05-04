@@ -16,9 +16,9 @@
 typedef struct InputData {
   float speed;  // slide bar potentiometers, slave 1
   float gain;   // slide bar potentiometers, slave 1
-  //uint8 high_eq;  // knobs, slave 1
-  //uint8 mid_eq; // knobs, slave 1
-  //uint8 low_eq; // knobs, slave 1
+  float hpgain;  // knobs, slave 1
+  float mpgain; // knobs, slave 1
+  float lpgain; // knobs, slave 1
   //uint8 fx1;    // knobs, slave 1
   //uint8 fx2;    // knobs, slave 1
   //uint8 fx3;    // knobs, slave 1
@@ -29,10 +29,23 @@ typedef struct InputData {
   int trackno; //menu toggle encoder
   //uint8 fx_onoff; // buttons, slave 2
 } InputData;
-InputData data = {1,.5,0,0,1,0};
+InputData data = {1,.5,.5, .5, .5,0,0,1,0};
+typedef struct biquad{
+    float a0, a1, a2;
+    float b1, b2;
+    float hist1, hist2;
+} biquad;
+
+
+biquad lpf = {.003765, .007529, .003765, -1.819091,.834149, 0, 0 };
+biquad hpf = {.666638, -1.333276, .666638, -1.218876, .447677, 0, 0};
+
+
 int flag = 0;
 void * thread_sampling(void * unused);
 void gainfn(float *inputarr, int samples, int channels, float mult);
+void L3bandEQ(float *in,int samples, int channels, biquad lpf, biquad hpf);
+void R3bandEQ(float *in, int samples, int channels, biquad lpf, biquad hpf);
 /**********************************************************************/
 main(int argc, char **argv) {
   
@@ -173,6 +186,8 @@ main(int argc, char **argv) {
        buffin = buffin + datastr.input_frames_used*sfinf[prevtrack].channels;
        //datastr.input_frames -= datastr.input_frames_used; 
        //printf("number of frames generated %d \n", datastr.output_frames_gen);
+       L3bandEQ(buffout, frames, sfinf[prevtrack].channels, lpf, hpf);
+       R3bandEQ(buffout, frames, sfinf[prevtrack].channels, lpf, hpf);
        gainfn(buffout, frames, sfinf[prevtrack].channels, data.gain);
        src_float_to_short_array(buffout, final, frames*sfinf[prevtrack].channels);//frames
        usleep(3000); //even with all the processing we can still sleep for like 3000;
@@ -247,15 +262,43 @@ void * thread_sampling(void * unused)
     }else if (c == 'n'){
         data.next = 1;
         data.trackno += 1;
-        if (data.trackno >=  NUMFILES) data.trackno = NUMFILES - 1;
+        if (data.trackno >=  NUMFILES){
+            data.next = 0;
+            data.trackno = NUMFILES - 1;
+        }
     }else if (c == 'b'){
         data.back = 1;
         data.trackno -= 1;
-        if (data.trackno < 0) data.trackno = 0;
+        if (data.trackno < 0){
+            data.trackno = 0;
+            data.back = 0;
+        }
     }else if (c == '1'){
         data.trackno = 0;
     } else if (c == '2'){
         data.trackno = 1;
+    }else if (c == 'l'){
+        data.lpgain = data.lpgain + .1;
+        if (data.lpgain >= 2) data.lpgain = 2;
+    }else if (c == 'h'){
+        data.hpgain = data.hpgain + .05;
+        if (data.hpgain >= 1.1) data.hpgain = 1.1;
+    }else if (c == 'm'){
+        data.mpgain = data.mpgain +.1;
+        if (data.mpgain >= 2) data.mpgain = 2;
+    }else if (c == 'j'){
+        data.lpgain -= .1;
+        if (data.lpgain <= 0) data.lpgain = 0;
+    }else if (c == 'k'){
+        data.hpgain -= .1;
+        if (data.hpgain <= 0) data.hpgain = 0;
+    }else if (c == 'z'){
+        data.mpgain -= .1;
+        if (data.mpgain <= 0) data.mpgain = 0;
+    }else if (c == 'q'){
+        data.hpgain = 0;
+    }else if (c == 'w'){
+        data.lpgain = 0;
     }
   }
     return NULL;
@@ -265,5 +308,104 @@ void gainfn(float *inputarr, int samples, int channels , float mult){
     int i = 0;
     for (i = 0; i<channels*samples;i++){
         inputarr[i] = inputarr[i] * mult;
+    }
+}
+
+void L3bandEQ(float *in, int samples, int channels, biquad lpf, biquad hpf){
+    lpf.hist2 = in[0];
+    lpf.hist1 = in[2];
+    hpf.hist2 = in[0];
+    hpf.hist1 = in[2];
+    int i;
+    float outl, outm, outh;
+    float nhistl, nhisth;
+    for (i = 4; i< samples*channels; i+=2){
+        //do thw low pass
+        outl = (lpf.a0)*in[i];
+        outl = outl - (lpf .hist1) * (lpf . b1);//poles
+        nhistl = outl - (lpf .hist2)*(lpf .b2);//poles
+        outl = nhistl + (in[i -2]) *(lpf . a1);//zeros
+        outl = outl + (in[i -4])*(lpf . a2);//zeros
+       lpf.hist2 = lpf.hist1;
+       lpf.hist1 = nhistl;
+        
+        //outl =( lpf.a0 * in[i]) + (lpf.a1 * in[i - 2]) + (lpf.a2 * in[i - 4]);
+        //outl = outl - (lpf.b1 * lpf.hist1) - (lpf.b2 *lpf.hist2);
+        
+        //lpf . hist2 = lpf .hist1;
+        //lpf .hist1 = outl;
+        
+
+        //do the high pass
+        outh = (hpf.a0)*in[i];
+        outh = outh - (hpf .hist1) * (hpf . b1);
+        nhisth = outh - (hpf .hist2)*(hpf .b2);
+        outh = nhistl + (in[i-2]) *(hpf . a1);
+        outh = outh + (in[i-4])*(hpf . a2);
+        hpf . hist2 = hpf .hist1;
+        hpf .hist1 = nhisth;
+        //outl =( hpf.a0 * in[i]) + (hpf.a1 * in[i - 2]) + (hpf.a2 * in[i - 4]);
+        //outl = outl - (hpf.b1 * hpf.hist1) - (hpf.b2 *hpf.hist2);
+        
+        //hpf . hist2 = hpf .hist1;
+        //hpf .hist1 = outl;
+
+
+
+        outm = in[i] - outh - outl;
+
+        outl = outl * data.lpgain;
+        outm = outm*data.mpgain;
+        outh = outh * data.hpgain;
+
+        in[i] = outl + outm + outh;
+    }
+}
+
+void R3bandEQ(float *in, int samples, int channels, biquad lpf, biquad hpf){
+    lpf.hist2 = in[1];
+    lpf.hist1 = in[3];
+    hpf.hist2 = in[1];
+    hpf.hist1 = in[3];
+    int i;
+    float outl, outm, outh;
+    float nhistl, nhisth;
+    for (i = 5; i< samples*channels; i+=2){
+        //do thw low pass
+        outl = (lpf.a0)*in[i];
+        outl = outl - (lpf .hist1) * (lpf . b1);//poles
+        nhistl = outl - (lpf .hist2)*(lpf .b2);//poles
+        outl = nhistl + (in[i -2]) *(lpf . a1);//zeros
+        outl = outl + (in[i -4])*(lpf . a2);//zeros
+        lpf . hist2 = lpf .hist1;
+        lpf .hist1 = nhistl;
+        //outl =( lpf.a0 * in[i]) + (lpf.a1 * in[i - 2]) + (lpf.a2 * in[i - 4]);
+        //outl = outl - (lpf.b1 * lpf.hist1) - (lpf.b2 *lpf.hist2);
+        
+        //lpf . hist2 = lpf .hist1;
+        //lpf .hist1 = outl;
+         
+
+        //do the high pass
+        outh = (hpf.a0)*in[i];
+        outh = outh - (hpf .hist1) * (hpf . b1);
+        nhisth = outh - (hpf .hist2)*(hpf .b2);
+        outh = nhistl + (in[i-2]) *(hpf . a1);
+        outh = outh + (in[i-4])*(hpf . a2);
+        hpf . hist2 = hpf .hist1;
+        hpf .hist1 = nhisth;
+        //outl =( hpf.a0 * in[i]) + (hpf.a1 * in[i - 2]) + (hpf.a2 * in[i - 4]);
+        //outl = outl - (hpf.b1 * hpf.hist1) - (hpf.b2 *hpf.hist2);
+        
+        //hpf . hist2 = hpf .hist1;
+        //hpf .hist1 = outl;
+         
+        outm = in[i] - outh - outl;
+
+        outl = outl * data.lpgain;
+        outm = outm*data.mpgain;
+        outh = outh * data.hpgain;
+
+        in[i] = outl + outm + outh;
     }
 }

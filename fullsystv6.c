@@ -10,7 +10,7 @@
 #define PCM_DEVICE "default"
 #define converter 1
 #define MAX_PLAY_RATE 5
-#define NUMFILES 2
+#define NUMFILES 5
 
 // GLOBAL STRUCT
 typedef struct InputData {
@@ -29,7 +29,7 @@ typedef struct InputData {
   int trackno; //menu toggle encoder
   //uint8 fx_onoff; // buttons, slave 2
 } InputData;
-InputData data = {1,.5,0,0,1,0};
+InputData data = {1,.5,0,0,0,0};
 int flag = 0;
 void * thread_sampling(void * unused);
 void gainfn(float *inputarr, int samples, int channels, float mult);
@@ -42,7 +42,8 @@ main(int argc, char **argv) {
     float *eofin;
     float *buffout;
     short *final;
-    char *file[NUMFILES] = {"musik.wav", "wtm.wav"};
+    char *file[NUMFILES] = {"/home/pi/HI THIS IS DJ/mp2/mini-project/musik.wav", "/home/pi/HI THIS IS DJ/mp2/mini-project/wtm.wav", "/home/pi/HI THIS IS DJ/mp2/mini-project/aboveandbeyond.wav",
+    "/home/pi/HI THIS IS DJ/mp2/mini-project/TDFW.wav", "/home/pi/HI THIS IS DJ/mp2/mini-project/zedd.wav"};
     //char *file2 = "got.wav";
     int pcm, pcmrc;
     int tmp;
@@ -68,7 +69,7 @@ main(int argc, char **argv) {
     
     for(i = 0; i < NUMFILES; i++){
     inputf[i] = sf_open(file[i], SFM_READ, &(sfinf[i]));
-    if (inputf[i] == NULL) printf("COULD NOT OPEN FILE SORRY \n\n");
+    if (inputf[i] == NULL) printf("COULD NOT OPEN FILE SORRY %d\n\n", i);
         if ((filein[i] = malloc(sizeof(float)*sfinf[i].channels*sfinf[i].frames)) == NULL)
         {
            printf("MAN YOU OUT OF MEM for file %d\n\n", i);
@@ -229,11 +230,12 @@ void * thread_sampling(void * unused)
   if (!bcm2835_init()) {return NULL;}
   int i = 0;
   uint8_t send_data[11] = {0x10,0x20,0x30,0x40,0x50,0x60,0x70,0x80,0x90,0xA0,0xB0};
-  volatile uint8_t rec_data[11] = {0,0,0,0,0,0,0,0,0,0,0};
+  volatile uint8_t rec_data[12] = {0};
   uint8_t  read_data = 0;
 
      // BEGIN SPI
-     
+    bcm2835_spi_begin();
+
 while (1){
      // WRITER SPI
      bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);      // The default
@@ -246,12 +248,12 @@ while (1){
           read_data = bcm2835_spi_transfer(send_data[i]);//should be read_data in working code
           //printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
          rec_data[i] = read_data;
-      //   printf("Received data = 0x%02X\n",read_data); // DO NOT REMOVE!@$&*!^$*(!#&
+         //printf("Received data = 0x%02X\n",read_data); // DO NOT REMOVE!@$&*!^$*(!#&
         read_data = 0;
       //putting speed and gain inside for loop
       usleep(1000);
       data.speed = ((1.4/255) * rec_data[0]) + 0.3;
-      //printf("Speed = %.1f\n");
+      /* printf("Speed = %.1f\n"); */
       data.gain = ((1.8/255) * rec_data[1]) + .2;
 }
       //data.play_pause = rec_data[10] & 0x80;
@@ -265,9 +267,39 @@ while (1){
       bcm2835_spi_chipSelect(BCM2835_SPI_CS1);
       bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS1,LOW);
       
-      read_data = bcm2835_spi_transfer(0x00);
-      usleep(10);
-      data.trackno = read_data;
+      for(i = 0; i < 2; i++) {
+          read_data = bcm2835_spi_transfer(send_data[i]);
+         //printf("Received data = 0x%02X\n",read_data); // DO NOT REMOVE!@$&*!^$*(!#&
+          rec_data[i + 10] = read_data;
+          usleep(10);
+      }
+
+        data.trackno = rec_data[10];
+        //printf("Track no = 0x%02x\n", data.trackno);
+
+        if (rec_data[11] & 0x80){
+            data.next = 1;
+            data.trackno++;
+            if (data.trackno >= NUMFILES){
+                data.trackno = NUMFILES - 1;
+                data.next = 0;
+            }
+            printf("Track no = 0x%02X\n",data.trackno);
+        }
+        
+        if (rec_data[11] & 0x10){
+            data.back = 1;
+            data.trackno--;
+            if (data.trackno <= 0){
+                data.trackno = 0;
+            }
+            printf("Track no = 0x%02X\n",data.trackno);
+        }
+        
+        if(rec_data[11] & 0x20) {
+            data.play_pause = !data.play_pause;
+        }
+
       // read_data = bcm2835_spi_transfer(0x10);
      // usleep(10);
      // data.play_pause = read_data & 0x80;

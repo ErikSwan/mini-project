@@ -9,14 +9,13 @@
 #include <math.h>   
 
 
-#define PCM_DEVICE "default"//"hw:1,0" for the dac  "default" for the onbuilt jack
+#define PCM_DEVICE "hw:1,0"//"hw:1,0" for the dac  "default" for the onbuilt jack
 #define MAX_PLAY_RATE 5//basically for buffer management so our input buffer is always big enough for the effective downsample happening
 #define converter 1//0 for highest quality(dont do this), 1 for medium(this works), 2 for fastest sinc, 3 for ZOH, 4 for linear
 
 #define PI 3.14159265359 
 
-void flange(float *in, float *out, float flgain, float fdelmax, float flfreq, int size, double samplerate);
-
+void flange(float *in, float *out, float flgain, float fdelmax, float flfreq, int size, double samplerate, int * fltime);
 
 main(int argc, char **argv){
     snd_pcm_t *handle;
@@ -37,9 +36,10 @@ main(int argc, char **argv){
     float *buffout = NULL;//float out of the converter
     short *final = NULL;//final array to write to snd card
 
-    float fldelmax = 600;
-    float flfreq = 20;
-    float flgain = .8;
+    float fldelmax = 256;
+    float flfreq = 1;
+    float flgain = .5;
+    int fltime = 0;
 
 
     int pcm, readcount, pcmrc, blah;//pcm is used for error checking the alsa stuff, pcmrc is used in the main loop
@@ -158,10 +158,10 @@ main(int argc, char **argv){
       
 
       // if (datastr.input_frames == 0 ){datastr.input_frames = frames*MAX_PLAY_RATE;}//frames
-       if (frames > 5){ //need to add mask of flanger on effect button
+       if (frames > 10){ //need to add mask of flanger on effect button
            memset(flangebase, 0.0, frames*sfinf.channels*MAX_PLAY_RATE*sizeof(float));
            flangebuffout = flangebase;
-           flange(buffin, flangebuffout, flgain, fldelmax,flfreq, frames*MAX_PLAY_RATE, sfinf.samplerate);
+           flange(buffin, flangebuffout, flgain, fldelmax,flfreq, frames*MAX_PLAY_RATE, sfinf.samplerate, &fltime);
 
        }
 
@@ -210,28 +210,27 @@ main(int argc, char **argv){
     return 0;
 }
 
-void flange(float *in, float *out,float flgain , float fldelmax, float flfreq, int size, double samplerate){
+void flange(float *in, float *out,float flgain , float fldelmax, float flfreq, int size, double samplerate, int * fltime){
     int i = 0;
-    int n = 0;
     float lchan, rchan, dlchan, drchan, nlchan, nrchan;
     float delay;
     int idelay;
 
     for (i = 0; i < 2*size; i+=2){
-        lchan = *(in + i);
-        rchan = *(in + 1 + i);
+        lchan = (in[i]);
+        rchan = (in[ 1 + i]);
 
-        delay = fldelmax*(1 + sin(2*PI*flfreq* (1.0/ samplerate)));
+        delay = fldelmax*(1 + sin(2*PI*flfreq*(*fltime)*(1.0/ samplerate)));
         idelay = (int) floor(delay);
-        dlchan = flgain*(*(in + i - idelay));
+        dlchan = flgain*(in[i - idelay]);
         nlchan = dlchan + (1 - flgain)*lchan;
-        *(out + i) = nlchan;
+        (out[i]) = nlchan;
 
-        drchan = flgain*(*(in + 1 + i - idelay));
+        drchan = flgain*((in[ 1 + i - idelay]));
         nrchan = drchan + (1 - flgain)*rchan;
-        *(out + 1 + i) = nrchan;
-        n++;
-
+        (out[1 + i]) = nrchan;
+        (*fltime)++;
+       // printf("hi there: %d\n\n", *fltime);
     }
 }
 

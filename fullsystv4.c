@@ -246,16 +246,17 @@ void * thread_sampling(void * unused)
 
   while (1) {
       for (i=0;i<11;i++){
-          read_data = bcm2835_spi_transfer(send_data[i]);
+          rec_data[i] = bcm2835_spi_transfer(send_data[i]);
           //printf("Sent to SPI: 0x%02X. Read back from SPI: 0x%02X.\n", send_data[i], read_data);
           rec_data[i] = read_data;
-          printf("Received data = 0x%02X\n",read_data); 
+          //printf("Received data = 0x%02X\n",read_data); 
           read_data = 0;
-      }
+      
       usleep(2000);
       data.speed = ((1.4/255) * rec_data[0]) + 0.3;
       //printf("Speed = %.1f\n");
       data.gain = ((1.8/255) * rec_data[1]) + .2;
+      }
       //data.play_pause = rec_data[10] & 0x80;
   }
 
